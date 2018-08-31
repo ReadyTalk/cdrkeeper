@@ -1,0 +1,9 @@
+sudo: required
+dist: trusty
+language: python
+services:
+- docker
+env:
+  global:
+script:
+- "./build.sh"
