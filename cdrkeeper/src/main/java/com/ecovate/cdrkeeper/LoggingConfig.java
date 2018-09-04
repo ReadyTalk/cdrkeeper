@@ -7,6 +7,7 @@ import java.util.logging.SimpleFormatter;
 
 public class LoggingConfig {
   public static void configureLogging() {
+
     try {
       final ConsoleHandler consoleHandler = new ConsoleHandler();
       consoleHandler.setLevel(Level.INFO);

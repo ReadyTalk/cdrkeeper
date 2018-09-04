@@ -1,6 +1,17 @@
 package com.ecovate.cdrkeeper;
 
+import java.lang.Thread.UncaughtExceptionHandler;
+
+import org.threadly.util.ExceptionUtils;
+
 public class Constants {
+  
+  public static final UncaughtExceptionHandler UEH = new UncaughtExceptionHandler() {
+    @Override
+    public void uncaughtException(Thread t, Throwable e) {
+      ExceptionUtils.getExceptionHandler().accept(e);
+    }
+  };
 
   public static final String CREATE_CDR_RAW_TABLE = 
       "CREATE TABLE IF NOT EXISTS cdr_raw("+

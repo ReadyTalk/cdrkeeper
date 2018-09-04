@@ -1,6 +1,7 @@
 package com.ecovate.cdrkeeper;
 
 import java.io.IOException;
+import java.lang.Thread.UncaughtExceptionHandler;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.Base64;
@@ -13,6 +14,8 @@ import org.jdbi.v3.core.Jdbi;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.threadly.concurrent.PriorityScheduler;
+import org.threadly.concurrent.TaskPriority;
+import org.threadly.concurrent.ThreadReferencingThreadFactory;
 import org.threadly.db.aurora.Driver;
 import org.threadly.litesockets.ThreadedSocketExecuter;
 import org.threadly.litesockets.buffers.ReuseableMergedByteBuffers;
@@ -29,6 +32,7 @@ import org.threadly.litesockets.server.http.HTTPServer.BodyListener;
 import org.threadly.litesockets.server.http.HTTPServer.ResponseWriter;
 import org.threadly.util.AbstractService;
 import org.threadly.util.Clock;
+import org.threadly.util.ExceptionUtils;
 
 import com.ecovate.cdrkeeper.cdr.CDRObject;
 import com.zaxxer.hikari.HikariConfig;
@@ -41,7 +45,6 @@ import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
 
 public class CDRKeeper extends AbstractService {
-  private static final Logger log = LoggerFactory.getLogger(CDRKeeper.class);
 
   private static final HTTPResponse BadRequestResponse = new HTTPResponseBuilder()
       .setResponseCode(HTTPResponseCode.BadRequest)
@@ -52,7 +55,9 @@ public class CDRKeeper extends AbstractService {
       .setHeader(HTTPConstants.HTTP_KEY_CONNECTION, "close")
       .build();
 
-  private final PriorityScheduler PS = new PriorityScheduler(5);
+  private final Logger log = LoggerFactory.getLogger(CDRKeeper.class);
+  private final ThreadReferencingThreadFactory trf = new ThreadReferencingThreadFactory("TP", true, true,Thread.currentThread().getPriority(), Constants.UEH , ExceptionUtils.getExceptionHandler());
+  private final PriorityScheduler PS = new PriorityScheduler(5, TaskPriority.High, 500, trf);
   private final ThreadedSocketExecuter TSE = new ThreadedSocketExecuter(PS);
   private final HTTPServer httpServer;
   private final HikariDataSource ds;
@@ -189,8 +194,13 @@ public class CDRKeeper extends AbstractService {
 
 
   public static void main(String[] args) throws Exception {
-    Driver.registerDriver();
+    System.setProperty(org.slf4j.impl.SimpleLogger.SHOW_DATE_TIME_KEY, "true");
+    System.setProperty(org.slf4j.impl.SimpleLogger.DATE_TIME_FORMAT_KEY, "yyyy-MM-dd HH:mm:ss.SSSZ");
     LoggingConfig.configureLogging();
+    Logger log = LoggerFactory.getLogger("Main");
+    log.info("logging configured!");
+    Driver.registerDriver();
+
     
     Integer env_listenport = null;
     if(System.getenv("CDR_LISTEN_PORT") != null) {

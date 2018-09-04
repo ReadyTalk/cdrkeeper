@@ -61,6 +61,8 @@ public class DBUtil {
     } catch(UnableToExecuteStatementException e) {
       if(e.getCause() instanceof SQLIntegrityConstraintViolationException) {
         log.error("Duplicate key, can not insert into CDR_CALLS!");
+        log.error("core_uuid:{}, call_uuid:{}, uuid:{}", cdr.getCoreuuid(), cdr.getVariables().getCall_uuid(), cdr.getVariables().getUuid());
+        log.error("",e);
       } else {
         log.error("",e);
       }
@@ -80,6 +82,7 @@ public class DBUtil {
     } catch(UnableToExecuteStatementException e) {
       if(e.getCause() instanceof SQLIntegrityConstraintViolationException) {
         log.error("Duplicate key, can not insert into CDR_RAW");
+        log.error("core_uuid:{}, call_uuid:{}, uuid:{}", cdr.getCoreuuid(), cdr.getVariables().getCall_uuid(), cdr.getVariables().getUuid());
       } else {
         log.error("",e);
       }
