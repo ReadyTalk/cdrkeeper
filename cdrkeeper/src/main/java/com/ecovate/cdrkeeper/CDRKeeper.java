@@ -1,7 +1,6 @@
 package com.ecovate.cdrkeeper;
 
 import java.io.IOException;
-import java.lang.Thread.UncaughtExceptionHandler;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.Base64;

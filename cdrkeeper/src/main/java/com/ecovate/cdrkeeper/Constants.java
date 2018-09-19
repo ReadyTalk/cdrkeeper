@@ -32,21 +32,21 @@ public class Constants {
           "start_time TIMESTAMP NULL DEFAULT NULL,"+
           "end_time TIMESTAMP NULL DEFAULT NULL,"+
           "direction varchar(36) NOT NULL," +
-          "sip_call_id varchar(255) NOT NULL,"+
+          "sip_call_id varchar(255),"+
           
-          "audio_inbound_media_packet_count BIGINT,"+
-          "audio_inbound_skip_packet_count BIGINT,"+
-          "audio_inbound_quality_percentage DOUBLE,"+
-          "audio_inbound_mos DOUBLE,"+
+          "audio_inbound_media_packet_count BIGINT NOT NULL DEFAULT 0,"+
+          "audio_inbound_skip_packet_count BIGINT NOT NULL DEFAULT 0,"+
+          "audio_inbound_quality_percentage DOUBLE NOT NULL DEFAULT 0,"+
+          "audio_inbound_mos DOUBLE NOT NULL DEFAULT 0,"+
 
-          "audio_outbound_media_packet_count BIGINT,"+
-          "audio_outbound_skip_packet_count BIGINT,"+
-          "write_codec varchar(36) NOT NULL," +
+          "audio_outbound_media_packet_count BIGINT NOT NULL DEFAULT 0,"+
+          "audio_outbound_skip_packet_count BIGINT NOT NULL DEFAULT 0,"+
+          "write_codec varchar(36)," +
           
-          "read_codec varchar(36) NOT NULL," +
-          "hangup_cause varchar(36) NOT NULL," +
-          "remote_media_ip varchar(36) NOT NULL," +
-          "local_media_ip varchar(36) NOT NULL," +
+          "read_codec varchar(36)," +
+          "hangup_cause varchar(36)," +
+          "remote_media_ip varchar(36)," +
+          "local_media_ip varchar(36)," +
 
           "PRIMARY KEY (core_uuid, call_uuid, uuid)"+
         ")";
