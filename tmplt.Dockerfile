@@ -18,5 +18,5 @@ RUN chmod 755 /run.sh
 RUN touch /env.sh
 
 ENTRYPOINT ["/run.sh"]
-CMD ["java","-Xmx16m","-jar","cdrkeeper-{VERSION}-all.jar"]
+CMD ["java","-Xmx256m","-jar","cdrkeeper-{VERSION}-all.jar"]
 

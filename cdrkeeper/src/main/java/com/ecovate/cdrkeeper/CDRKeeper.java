@@ -1,9 +1,11 @@
 package com.ecovate.cdrkeeper;
 
 import java.io.IOException;
+import java.io.StringWriter;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.LongAdder;
@@ -24,11 +26,12 @@ import org.threadly.litesockets.protocols.http.response.HTTPResponseBuilder;
 import org.threadly.litesockets.protocols.http.shared.HTTPConstants;
 import org.threadly.litesockets.protocols.http.shared.HTTPRequestMethod;
 import org.threadly.litesockets.protocols.http.shared.HTTPResponseCode;
-import org.threadly.litesockets.protocols.ws.WebSocketFrameParser.WebSocketFrame;
+import org.threadly.litesockets.protocols.websocket.WSFrame;
 import org.threadly.litesockets.server.http.HTTPServer;
 import org.threadly.litesockets.server.http.HTTPServer.BodyFuture;
 import org.threadly.litesockets.server.http.HTTPServer.BodyListener;
 import org.threadly.litesockets.server.http.HTTPServer.ResponseWriter;
+import org.threadly.litesockets.utils.IOUtils;
 import org.threadly.util.AbstractService;
 import org.threadly.util.Clock;
 import org.threadly.util.ExceptionUtils;
@@ -37,6 +40,12 @@ import com.ecovate.cdrkeeper.cdr.CDRObject;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 
+import io.prometheus.client.CollectorRegistry;
+import io.prometheus.client.Counter;
+import io.prometheus.client.Histogram;
+import io.prometheus.client.Histogram.Timer;
+import io.prometheus.client.exporter.common.TextFormat;
+import io.prometheus.client.hotspot.DefaultExports;
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.Argument;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
@@ -54,9 +63,9 @@ public class CDRKeeper extends AbstractService {
       .setHeader(HTTPConstants.HTTP_KEY_CONNECTION, "close")
       .build();
 
-  private final Logger log = LoggerFactory.getLogger(CDRKeeper.class);
+  private static final Logger log = LoggerFactory.getLogger(CDRKeeper.class);
   private final ThreadReferencingThreadFactory trf = new ThreadReferencingThreadFactory("TP", true, true,Thread.currentThread().getPriority(), Constants.UEH , ExceptionUtils.getExceptionHandler());
-  private final PriorityScheduler PS = new PriorityScheduler(5, TaskPriority.High, 500, trf);
+  private final PriorityScheduler PS = new PriorityScheduler(2, TaskPriority.High, 500, trf);
   private final ThreadedSocketExecuter TSE = new ThreadedSocketExecuter(PS);
   private final HTTPServer httpServer;
   private final HikariDataSource ds;
@@ -64,18 +73,40 @@ public class CDRKeeper extends AbstractService {
   private final String user;
   private final String password;
   private final String base64;
-  private final LongAdder httpRequests = new LongAdder();
   private final LongAdder cdrRequests = new LongAdder();
-  private volatile HTTPStatus status;
-  private volatile long startTime = Clock.lastKnownForwardProgressingMillis();
-
+  
+  private final Histogram httpRequestLatency = Histogram.build()
+      .name("http_requests_latency_seconds")
+      .help("HTTP Request latency in seconds.")
+      .register();
+  private final Counter requestCounter = Counter.build()
+      .name("http_requests_total")
+      .help("http request counter")
+      .labelNames("type")
+      .register();
+  private final Counter responseCounter = Counter.build()
+      .name("http_response_total")
+      .help("http response counter")
+      .labelNames("type")
+      .register();
+  
+  private final Counter cdrsProcessed = Counter.build()
+      .name("cdrs_processed_total")
+      .help("cdrs_processed_total")
+      .register();
+  
+  private final Histogram cdrsProcessedTime =Histogram.build()
+      .name("cdrs_process_time_seconds")
+      .help("cdrs_process_time_seconds")
+      .register();
+  
   CDRKeeper(InetSocketAddress listener, HikariConfig hc, String user, String password) throws IOException {
     TSE.startIfNotStarted();
     this.user = user;
     this.password = password;
     this.base64 = Base64.getEncoder().encodeToString((this.user+":"+this.password).getBytes());
     httpServer = new HTTPServer(TSE, listener.getAddress().getHostAddress(), listener.getPort());
-    httpServer.addHandler((h,r,b)->handle(h,r,b));
+    httpServer.setHandler((h,r,b)->handle(h,r,b));
     ds = new HikariDataSource(hc);
     jdbi = Jdbi.create(ds);
     try (Handle h = jdbi.open()) {
@@ -88,29 +119,13 @@ public class CDRKeeper extends AbstractService {
         log.info("Created CDR_CALL Table");
       }
     }
-    createStatus();
   }
   
-  private void createStatus() {
-    Map<String, Long> map = new HashMap<>();
-    map.put("httpRequests", httpRequests.sum());
-    map.put("cdrRequests", cdrRequests.sum());
-    map.put("uptime_ms", Clock.lastKnownForwardProgressingMillis()-startTime);
-    byte[] tmp = CDRObject.GSON_PRETTY.toJson(map).getBytes();
-    HTTPResponse hr = new HTTPResponseBuilder()
-    .setResponseCode(HTTPResponseCode.OK)
-    .setHeader(HTTPConstants.HTTP_KEY_CONTENT_LENGTH, Integer.toString(tmp.length))
-    .setHeader(HTTPConstants.HTTP_KEY_CONTENT_TYPE, "application/json")
-    .setHeader(HTTPConstants.HTTP_KEY_CONNECTION, "close")
-    .build();
-    
-    status = new HTTPStatus(hr, tmp);
-  }
-
   private void handle(HTTPRequest hr, ResponseWriter rw, BodyFuture bl) {
     rw.closeOnDone();
-    httpRequests.increment();
+    Timer t = httpRequestLatency.startTimer();
     HTTPRequestMethod rm = HTTPRequestMethod.valueOf(hr.getHTTPRequestHeader().getRequestMethod());
+    requestCounter.labels(rm.toString()).inc();
     String auth = hr.getHTTPHeaders().getHeader(HTTPConstants.HTTP_KEY_AUTHORIZATION);
     String b64 = "";
     if(auth != null && auth.startsWith("Basic ")) {
@@ -126,53 +141,58 @@ public class CDRKeeper extends AbstractService {
         }
 
         @Override
-        public void onWebsocketFrame(HTTPRequest httpRequest, WebSocketFrame wsf, ByteBuffer bb,
+        public void onWebsocketFrame(HTTPRequest httpRequest, WSFrame wsf, ByteBuffer bb,
             ResponseWriter responseWriter) {
+          responseCounter.labels(Integer.toString(BadRequestResponse.getResponseCode().getId())).inc();
           rw.sendHTTPResponse(BadRequestResponse);
           rw.done();
         }
 
         @Override
         public void bodyComplete(HTTPRequest httpRequest, ResponseWriter responseWriter) {
+          Timer t = cdrsProcessedTime.startTimer();
           try {
+            
             String json = mbb.getAsString(mbb.remaining());
             CDRObject cdr = CDRObject.GSON.fromJson(json, CDRObject.class);
-            cdrRequests.increment();
+            
             if(cdr.getVariables() == null || cdr.getVariables().getCall_uuid() == null) {
               log.error("Bad request json:{}", json);
+              responseCounter.labels(Integer.toString(BadRequestResponse.getResponseCode().getId())).inc();
               rw.sendHTTPResponse(BadRequestResponse);
               return;
             }
             log.info("Got uuid:{}, callid:{} for server:{}", cdr.getVariables().getUuid(), cdr.getVariables().getCall_uuid(), cdr.getCoreuuid());
             DBUtil.writeRawJson(jdbi, cdr, json);
             DBUtil.writeParsedJson(jdbi, cdr, json);
+            cdrsProcessed.inc();
+            responseCounter.labels(Integer.toString(GoodRequestResponse.getResponseCode().getId())).inc();
             rw.sendHTTPResponse(GoodRequestResponse);
           } catch(Exception e) {
             log.error("Error parsing request",e);
+            responseCounter.labels(Integer.toString(BadRequestResponse.getResponseCode().getId())).inc();
             rw.sendHTTPResponse(BadRequestResponse);
           } finally {
             rw.done();  
+            t.close();
           }
         }
-      });
-    } else if(rm == HTTPRequestMethod.GET && path.startsWith("/status")) {
-      HTTPStatus ls = status;
-      rw.sendHTTPResponse(ls.statusResponse);
-      rw.writeBody(ByteBuffer.wrap(ls.body));
+       });
+    } else if(rm == HTTPRequestMethod.GET && path.startsWith("/metrics")) {
+      metricsResponse(hr,rw,bl);
       rw.done();
     } else {
       log.info("Got unknown request:{}\n", hr.toString());
+      responseCounter.labels(Integer.toString(BadRequestResponse.getResponseCode().getId())).inc();
       rw.sendHTTPResponse(BadRequestResponse);
       rw.done();
     }
-
+    t.close();
   }
 
   @Override
   protected void startupService() {
-    startTime = Clock.lastKnownForwardProgressingMillis();
     httpServer.start();
-    PS.scheduleAtFixedRate(()->createStatus(), 5000, 5000);
   }
 
   @Override
@@ -181,13 +201,36 @@ public class CDRKeeper extends AbstractService {
     TSE.stop();
     PS.shutdownNow();
   }
-  
-  private class HTTPStatus {
-    private final byte[] body;
-    private final HTTPResponse statusResponse;
-    HTTPStatus(HTTPResponse hr, byte[] body) {
-      this.body = body;
-      this.statusResponse = hr;
+    
+  public void metricsResponse(HTTPRequest httpRequest, ResponseWriter rw, BodyFuture bodyListener) {
+    rw.closeOnDone();
+    String metrics = "";
+    StringWriter writer = new StringWriter();
+    try {
+      TextFormat.write004(writer, CollectorRegistry.defaultRegistry.filteredMetricFamilySamples(Collections.emptySet()));
+      metrics = writer.toString();
+      HTTPResponse hr = new HTTPResponseBuilder()
+          .setResponseCode(HTTPResponseCode.OK)
+          .setHeader(HTTPConstants.HTTP_KEY_CONTENT_LENGTH, Integer.toString(metrics.length()))
+          .setHeader(HTTPConstants.HTTP_KEY_CONTENT_TYPE, "text/plain")
+          .setHeader(HTTPConstants.HTTP_KEY_CONNECTION, "close")
+          .build();
+      rw.sendHTTPResponse(hr);
+      responseCounter.labels(Integer.toString(hr.getResponseCode().getId())).inc();
+      rw.writeBody(ByteBuffer.wrap(metrics.getBytes()));
+      rw.done();
+    } catch (Exception e) {
+      log.error("Error parsing metrics!", e);
+      HTTPResponse hr = new HTTPResponseBuilder()
+          .setResponseCode(HTTPResponseCode.InternalServerError)
+          .setHeader(HTTPConstants.HTTP_KEY_CONTENT_LENGTH, "0")
+          .setHeader(HTTPConstants.HTTP_KEY_CONNECTION, "close")
+          .build();
+      rw.sendHTTPResponse(hr);
+      responseCounter.labels(Integer.toString(hr.getResponseCode().getId())).inc();
+      rw.done();
+    } finally {
+      IOUtils.closeQuietly(writer);
     }
   }
 
@@ -199,6 +242,7 @@ public class CDRKeeper extends AbstractService {
     Logger log = LoggerFactory.getLogger("Main");
     log.info("logging configured!");
     Driver.registerDriver();
+    DefaultExports.initialize();
 
     
     Integer env_listenport = null;

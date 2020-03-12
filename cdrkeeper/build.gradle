@@ -27,13 +27,17 @@ dependencies {
     "net.sourceforge.argparse4j:argparse4j:0.8.1",
     "org.slf4j:slf4j-api:1.7.21",
     "org.slf4j:slf4j-simple:1.7.21",
-    "org.threadly:threadly:5.27",
-    "org.threadly:litesockets-http-server:0.19",
-    "org.threadly:litesockets:4.6",
+    "org.threadly:threadly:6.0",
+    "org.threadly:litesockets-http-server:0.27",
+    "org.threadly:litesockets-http-protocol:0.27",
+    "org.threadly:litesockets:4.14",
     "org.jdbi:jdbi3-core:3.4.0",
     "com.zaxxer:HikariCP:3.2.0",
-    "org.threadly:auroraArc-mysql:0.7",
+    "org.threadly:auroraArc-mysql:0.13",
     "mysql:mysql-connector-java:8.0.11",
+    "io.prometheus:simpleclient_servlet:0.8.1",
+    "io.prometheus:simpleclient_hotspot:0.8.1",
+
   )
 }
 
