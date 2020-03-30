@@ -3,13 +3,13 @@
 if [ -z $VERSION ]; then
   VERSION="unknown"
 
-  if [ ! -z $GIT_TAG ]; then
-    echo "GET_TAG set: $GET_TAG"
-    VERSION=$GET_TAG
+  if [ ! -z $TRAVIS_TAG ]; then
+    echo "GET_TAG set: $TRAVIS_TAG"
+    VERSION=$TRAVIS_TAG
   fi
-  if [ ! -z $GIT_BRANCH ]; then
-    echo "GET_BRANCH set: ${GIT_BRANCH}"
-    VERSION=${GIT_BRANCH}
+  if [ ! -z $TRAVIS_BRANCH ]; then
+    echo "GET_BRANCH set: ${TRAVIS_BRANCH}"
+    VERSION=${TRAVIS_BRANCH}
   fi
   if ! git diff-index --quiet HEAD -- 2>/dev/null; then
     echo "found local only changes.. setting version to \"local\""
