@@ -41,7 +41,7 @@ set -e
 
 docker run --rm -u $(id -u ${USER}):$(id -g ${USER}) -v "$PWD":/home/gradle/cdrkeeper -w /home/gradle/cdrkeeper -e ORG_GRADLE_PROJECT_version=${VERSION} gradle:4.10-jdk8-alpine gradle clean build
 
-docker build --build-arg VERSION=$VERSION -t cdrkeeper:${VERSION} .
+docker build --build-arg VERSION=$VERSION -t readytalk/cdrkeeper:${VERSION} .
 
 if [[ ${TRAVIS} && -n $DOCKER_USERNAME && -n $DOCKER_PASSWORD ]]; then
   docker login -u="$DOCKER_USERNAME" -p="$DOCKER_PASSWORD"
