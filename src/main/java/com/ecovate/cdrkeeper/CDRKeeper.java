@@ -6,9 +6,6 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.Base64;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.atomic.LongAdder;
 
 import org.jdbi.v3.core.Handle;
 import org.jdbi.v3.core.Jdbi;
@@ -33,7 +30,6 @@ import org.threadly.litesockets.server.http.HTTPServer.BodyListener;
 import org.threadly.litesockets.server.http.HTTPServer.ResponseWriter;
 import org.threadly.litesockets.utils.IOUtils;
 import org.threadly.util.AbstractService;
-import org.threadly.util.Clock;
 import org.threadly.util.ExceptionUtils;
 
 import com.ecovate.cdrkeeper.cdr.CDRObject;
@@ -73,12 +69,12 @@ public class CDRKeeper extends AbstractService {
   private final String user;
   private final String password;
   private final String base64;
-  private final LongAdder cdrRequests = new LongAdder();
   
   private final Histogram httpRequestLatency = Histogram.build()
       .name("http_requests_latency_seconds")
       .help("HTTP Request latency in seconds.")
       .register();
+  
   private final Counter requestCounter = Counter.build()
       .name("http_requests_total")
       .help("http request counter")
@@ -95,9 +91,33 @@ public class CDRKeeper extends AbstractService {
       .help("cdrs_processed_total")
       .register();
   
-  private final Histogram cdrsProcessedTime =Histogram.build()
+  private final Counter cdrsBytes = Counter.build()
+      .name("cdrs_processed_bytes")
+      .help("cdrs_processed_bytes")
+      .register();
+  
+  private final Histogram cdrsProcessedTime = Histogram.build()
       .name("cdrs_process_time_seconds")
       .help("cdrs_process_time_seconds")
+      .register();
+  
+  private final Histogram callTime = Histogram.build()
+      .buckets(60, 300, 600, 1200, 1800, 3600, 7200, 14400, 28800, 43200, 86400)
+      .name("call_time_seconds")
+      .help("call_time_seconds")
+      .labelNames("cluster")
+      .register();
+  
+  private final Counter codecs = Counter.build()
+      .name("call_codecs")
+      .help("call_codecs")
+      .labelNames("cluster", "codec")
+      .register();
+  
+  private final Histogram callMOS = Histogram.build()
+      .name("call_mos")
+      .help("call_mos")
+      .labelNames("cluster", "direction")
       .register();
   
   CDRKeeper(InetSocketAddress listener, HikariConfig hc, String user, String password) throws IOException {
@@ -151,11 +171,17 @@ public class CDRKeeper extends AbstractService {
         @Override
         public void bodyComplete(HTTPRequest httpRequest, ResponseWriter responseWriter) {
           Timer t = cdrsProcessedTime.startTimer();
+          String cluster = httpRequest.getHTTPRequestHeader().getRequestQueryValue("cluster");
+          if(cluster == null || cluster.equals("")) {
+            cluster = "unknown";
+          }
           try {
-            
+            int size = mbb.remaining();
             String json = mbb.getAsString(mbb.remaining());
             CDRObject cdr = CDRObject.GSON.fromJson(json, CDRObject.class);
-            
+            callTime.labels(cluster).observe(cdr.getCallDuration());
+            codecs.labels(cluster, cdr.getVariables().getWrite_codec()).inc();
+            callMOS.labels(cluster, cdr.getVariables().getDirection()).observe(cdr.getMOS());
             if(cdr.getVariables() == null || cdr.getVariables().getCall_uuid() == null) {
               log.error("Bad request json:{}", json);
               responseCounter.labels(Integer.toString(BadRequestResponse.getResponseCode().getId())).inc();
@@ -166,6 +192,7 @@ public class CDRKeeper extends AbstractService {
             DBUtil.writeRawJson(jdbi, cdr, json);
             DBUtil.writeParsedJson(jdbi, cdr, json);
             cdrsProcessed.inc();
+            cdrsBytes.inc(size);
             responseCounter.labels(Integer.toString(GoodRequestResponse.getResponseCode().getId())).inc();
             rw.sendHTTPResponse(GoodRequestResponse);
           } catch(Exception e) {

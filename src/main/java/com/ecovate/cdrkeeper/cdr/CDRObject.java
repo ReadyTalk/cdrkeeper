@@ -35,6 +35,20 @@ public class CDRObject {
     this.app_log = app_log;
     this.callflow = new ArrayList<>(callflow);
   }
+  
+  public double getCallDuration() {
+    double time = 0;
+    for(CallFlow cf: callflow) {
+      double startTime = Double.parseDouble(cf.getTimes().getCreated_time())/1000000.0;
+      double endTime = Double.parseDouble(cf.getTimes().getHangup_time())/1000000.0;
+      time+=endTime-startTime;
+    }
+    return time;
+  }
+  
+  public double getMOS() {
+      return getCallStats().getAudio().getInbound().getMos();
+  }
 
   public String getCoreuuid() {
     return coreuuid;
