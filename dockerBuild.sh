@@ -20,11 +20,11 @@ if [ -z $VERSION ]; then
     echo "No Version found, discovering..."
     GIT_FOUND_TAG=$(git describe --exact-match --tags HEAD 2>/dev/null)
     if [ ! -z $GIT_FOUND_TAG ]; then
-      VERSION=$GIT_FOUND_TAG
+      VERSION="${GIT_FOUND_TAG}"
     fi
     GIT_FOUND_BRANCH=$(git branch 2>/dev/null | grep \* | cut -d ' ' -f2)
     if [ ! -z $GIT_FOUND_BRANCH ]; then
-      VERSION=$GIT_FOUND_BRANCH
+      VERSION="${GIT_FOUND_BRANCH}"
     fi
   fi
 else
@@ -34,6 +34,8 @@ fi
 if [[ "${VERSION}" == "master" ]]; then
   VERSION="latest"
 fi
+
+echo "Version set: ${VERSION}"
 
 set -e
 
