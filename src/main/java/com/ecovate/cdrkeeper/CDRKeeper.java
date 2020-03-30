@@ -123,8 +123,8 @@ public class CDRKeeper extends AbstractService {
   
   private final Histogram packetLoss = Histogram.build()
       .buckets(.001,.01,.02,.03,.04,.05,.06,.07,.08,.10,.20,.50,1.0)
-      .name("call_mos")
-      .help("call_mos")
+      .name("call_packet_loss")
+      .help("call_packet_loss")
       .labelNames("cluster", "direction")
       .register();
   
