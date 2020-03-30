@@ -115,6 +115,7 @@ public class CDRKeeper extends AbstractService {
       .register();
   
   private final Histogram callMOS = Histogram.build()
+      .buckets(0, 1, 2, 3, 3.5, 3.8, 4.0, 4.1, 4.2, 4.3, 4.4, 4.5)
       .name("call_mos")
       .help("call_mos")
       .labelNames("cluster", "direction")
@@ -151,7 +152,7 @@ public class CDRKeeper extends AbstractService {
     if(auth != null && auth.startsWith("Basic ")) {
       b64 = auth.substring(6);
     }
-    String path = hr.getHTTPRequestHeader().getRequestPath();
+    final String path = hr.getHTTPRequestHeader().getRequestPath();
     if(rm == HTTPRequestMethod.POST && path.startsWith("/cdr") && b64.equals(this.base64)) {
       bl.setBodyListener(new BodyListener() {
         ReuseableMergedByteBuffers mbb = new ReuseableMergedByteBuffers(false);
@@ -171,9 +172,12 @@ public class CDRKeeper extends AbstractService {
         @Override
         public void bodyComplete(HTTPRequest httpRequest, ResponseWriter responseWriter) {
           Timer t = cdrsProcessedTime.startTimer();
-          String cluster = httpRequest.getHTTPRequestHeader().getRequestQueryValue("cluster");
-          if(cluster == null || cluster.equals("")) {
-            cluster = "unknown";
+          String cluster = "unknown";
+          if(path.length() > 4) {
+            String[] tmp = path.split("/");
+            if(tmp.length >=3 && tmp[2].length() > 0) {
+              cluster = tmp[2];
+            }
           }
           try {
             int size = mbb.remaining();
