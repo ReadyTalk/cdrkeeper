@@ -193,8 +193,12 @@ public class CDRKeeper extends AbstractService {
             String direction = cdr.getVariables().getDirection();
             
             callTime.labels(cluster).observe(cdr.getCallDuration());
-            codecs.labels(cluster, direction).inc();
+            codecs.labels(cluster, cdr.getVariables().getWrite_codec()).inc();
             callMOS.labels(cluster, direction).observe(cdr.getMOS());
+            log.info(String.format("SkipPackets: %.5f", cdr.getCallStats().getAudio().getInbound().getSkip_packet_count()));
+            log.info(String.format("Packets: %.5f", cdr.getCallStats().getAudio().getInbound().getPacket_count()));
+            log.info(String.format("TotalPackets: %.5f", cdr.getCallStats().getAudio().getInbound().getPacket_count()+cdr.getCallStats().getAudio().getInbound().getSkip_packet_count()));
+            log.info(String.format("Packets: %.8f", cdr.getPacketLoss()));
             packetLoss.labels(cluster, direction).observe(cdr.getPacketLoss());
             
             if(cdr.getVariables() == null || cdr.getVariables().getCall_uuid() == null) {
