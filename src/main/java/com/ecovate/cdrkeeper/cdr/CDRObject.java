@@ -49,6 +49,10 @@ public class CDRObject {
   public double getMOS() {
       return getCallStats().getAudio().getInbound().getMos();
   }
+  
+  public double getPacketLoss() {
+    return getCallStats().getAudio().getInbound().getSkip_packet_count()/(getCallStats().getAudio().getInbound().getSkip_packet_count()/getCallStats().getAudio().getInbound().getPacket_count());
+  }
 
   public String getCoreuuid() {
     return coreuuid;

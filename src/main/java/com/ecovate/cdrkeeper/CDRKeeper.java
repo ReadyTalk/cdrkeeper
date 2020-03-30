@@ -121,6 +121,13 @@ public class CDRKeeper extends AbstractService {
       .labelNames("cluster", "direction")
       .register();
   
+  private final Histogram packetLoss = Histogram.build()
+      .buckets(.001,.01,.02,.03,.04,.05,.06,.07,.08,.10,.20,.50,1.0)
+      .name("call_mos")
+      .help("call_mos")
+      .labelNames("cluster", "direction")
+      .register();
+  
   CDRKeeper(InetSocketAddress listener, HikariConfig hc, String user, String password) throws IOException {
     TSE.startIfNotStarted();
     this.user = user;
@@ -183,9 +190,13 @@ public class CDRKeeper extends AbstractService {
             int size = mbb.remaining();
             String json = mbb.getAsString(mbb.remaining());
             CDRObject cdr = CDRObject.GSON.fromJson(json, CDRObject.class);
+            String direction = cdr.getVariables().getDirection();
+            
             callTime.labels(cluster).observe(cdr.getCallDuration());
-            codecs.labels(cluster, cdr.getVariables().getWrite_codec()).inc();
-            callMOS.labels(cluster, cdr.getVariables().getDirection()).observe(cdr.getMOS());
+            codecs.labels(cluster, direction).inc();
+            callMOS.labels(cluster, direction).observe(cdr.getMOS());
+            packetLoss.labels(cluster, direction).observe(cdr.getPacketLoss());
+            
             if(cdr.getVariables() == null || cdr.getVariables().getCall_uuid() == null) {
               log.error("Bad request json:{}", json);
               responseCounter.labels(Integer.toString(BadRequestResponse.getResponseCode().getId())).inc();
