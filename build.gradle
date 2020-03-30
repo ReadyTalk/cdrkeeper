@@ -13,9 +13,6 @@ repositories {
 mainClassName = 'com.ecovate.cdrkeeper.CDRKeeper'
 
 applicationName = 'cdrkeeper'
-//version = Project.hasProperty("VERSION") ? VERSION : "LOCAL"
-//println VERSION
-println "${version}"
 
 sourceCompatibility = 1.8
 targetCompatibility = 1.8

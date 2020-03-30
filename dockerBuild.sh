@@ -1,7 +1,5 @@
 #!/bin/bash
 
-set -e
-
 if [ -z $VERSION ]; then
   VERSION="unknown"
 
@@ -36,6 +34,8 @@ fi
 if [[ "${VERSION}" == "master" ]]; then
   VERSION="latest"
 fi
+
+set -e
 
 docker run --rm -u $(id -u ${USER}):$(id -g ${USER}) -v "$PWD":/home/gradle/cdrkeeper -w /home/gradle/cdrkeeper -e ORG_GRADLE_PROJECT_version=${VERSION} gradle:4.10-jdk8-alpine gradle clean build
 
