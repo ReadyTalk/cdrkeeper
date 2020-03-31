@@ -51,7 +51,7 @@ public class CDRObject {
   }
   
   public double getPacketLoss() {
-    return getCallStats().getAudio().getInbound().getSkip_packet_count()/(getCallStats().getAudio().getInbound().getSkip_packet_count()/getCallStats().getAudio().getInbound().getPacket_count());
+    return getCallStats().getAudio().getInbound().getSkip_packet_count()/((double)(getCallStats().getAudio().getInbound().getSkip_packet_count()+getCallStats().getAudio().getInbound().getPacket_count()));
   }
 
   public String getCoreuuid() {
