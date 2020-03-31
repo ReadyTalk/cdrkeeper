@@ -190,19 +190,25 @@ public class CDRKeeper extends AbstractService {
             int size = mbb.remaining();
             String json = mbb.getAsString(mbb.remaining());
             CDRObject cdr = CDRObject.GSON.fromJson(json, CDRObject.class);
-            String direction = cdr.getVariables().getDirection();
-            
-            callTime.labels(cluster).observe(cdr.getCallDuration());
-            codecs.labels(cluster, cdr.getVariables().getWrite_codec()).inc();
-            callMOS.labels(cluster, direction).observe(cdr.getMOS());
-
-            packetLoss.labels(cluster, direction).observe(cdr.getPacketLoss());
-            
             if(cdr.getVariables() == null || cdr.getVariables().getCall_uuid() == null) {
               log.error("Bad request json:{}", json);
               responseCounter.labels(Integer.toString(BadRequestResponse.getResponseCode().getId())).inc();
               rw.sendHTTPResponse(BadRequestResponse);
               return;
+            }
+
+            try {
+              String direction = cdr.getVariables().getDirection();
+              String codec = cdr.getVariables().getWrite_codec();
+              if(codec == null) {
+                codec = "none";
+              }
+              callTime.labels(cluster).observe(cdr.getCallDuration());
+              codecs.labels(cluster, codec).inc();
+              callMOS.labels(cluster, direction).observe(cdr.getMOS());
+              packetLoss.labels(cluster, direction).observe(cdr.getPacketLoss());
+            } catch(Exception e) {
+              log.info("Exception with stats:\n{}", ExceptionUtils.stackToString(e));
             }
             log.info("Got uuid:{}, callid:{} for server:{}", cdr.getVariables().getUuid(), cdr.getVariables().getCall_uuid(), cdr.getCoreuuid());
             DBUtil.writeRawJson(jdbi, cdr, json);
