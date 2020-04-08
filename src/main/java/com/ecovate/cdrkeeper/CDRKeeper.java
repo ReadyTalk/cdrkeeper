@@ -198,15 +198,18 @@ public class CDRKeeper extends AbstractService {
             }
 
             try {
-              String direction = cdr.getVariables().getDirection();
-              String codec = cdr.getVariables().getWrite_codec();
-              if(codec == null) {
-                codec = "none";
+              if(cdr.getCallDuration() >= 30) {
+                String direction = cdr.getVariables().getDirection();
+                String codec = cdr.getVariables().getWrite_codec();
+                if(codec == null) {
+                  codec = "none";
+                }
+                callTime.labels(cluster).observe(cdr.getCallDuration());
+                codecs.labels(cluster, codec).inc();
+                callMOS.labels(cluster, direction).observe(cdr.getMOS());
+                packetLoss.labels(cluster, direction).observe(cdr.getPacketLoss());
+                log.info("Logged Stats uuid:{}, callid:{} for server:{} PL:{} Dur:{}", cdr.getVariables().getUuid(), cdr.getVariables().getCall_uuid(), cdr.getCoreuuid(), cdr.getPacketLoss(), cdr.getCallDuration());
               }
-              callTime.labels(cluster).observe(cdr.getCallDuration());
-              codecs.labels(cluster, codec).inc();
-              callMOS.labels(cluster, direction).observe(cdr.getMOS());
-              packetLoss.labels(cluster, direction).observe(cdr.getPacketLoss());
             } catch(Exception e) {
               log.info("Exception with stats:\n{}", ExceptionUtils.stackToString(e));
             }
