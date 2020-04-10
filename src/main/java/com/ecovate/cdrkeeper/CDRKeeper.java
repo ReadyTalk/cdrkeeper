@@ -208,7 +208,7 @@ public class CDRKeeper extends AbstractService {
                 codecs.labels(cluster, codec).inc();
                 callMOS.labels(cluster, direction).observe(cdr.getMOS());
                 packetLoss.labels(cluster, direction).observe(cdr.getPacketLoss());
-                log.info("Logged Stats uuid:{}, callid:{} for server:{} PL:{} Dur:{}", cdr.getVariables().getUuid(), cdr.getVariables().getCall_uuid(), cdr.getCoreuuid(), cdr.getPacketLoss(), cdr.getCallDuration());
+                log.info("Logged Stats uuid:{}, callid:{} for server:{} direction:{} PL:{} Dur:{}", cdr.getVariables().getUuid(), cdr.getVariables().getCall_uuid(), cdr.getCoreuuid(), direction, cdr.getPacketLoss(), cdr.getCallDuration());
               }
             } catch(Exception e) {
               log.info("Exception with stats:\n{}", ExceptionUtils.stackToString(e));
